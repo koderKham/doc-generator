@@ -391,6 +391,7 @@
     </div>
 
     <script>
+        {% raw %}
         let selectedTemplateId = null;
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -537,6 +538,7 @@
             el.className = `status-message ${type}`;
             setTimeout(() => { el.className = 'status-message'; }, 4000);
         }
+        {% endraw %}
     </script>
 </body>
 </html>
