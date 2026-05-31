@@ -59,6 +59,81 @@ class WordDocumentGenerator:
         return filename
     
     @staticmethod
+    def generate_from_docx(template_path, filled_data, output_path):
+        """
+        Generate a Word document from an uploaded .docx template
+        
+        Args:
+            template_path (str): Path to the template .docx file
+            filled_data (dict): Data to fill the template placeholders
+            output_path (str): Path where the output document will be saved
+        
+        Returns:
+            str: Path to generated document
+        """
+        try:
+            # Open the template document
+            doc = Document(template_path)
+            
+            # Replace placeholders in paragraphs
+            for paragraph in doc.paragraphs:
+                WordDocumentGenerator._replace_paragraph_placeholders(paragraph, filled_data)
+            
+            # Replace placeholders in tables
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            WordDocumentGenerator._replace_paragraph_placeholders(paragraph, filled_data)
+            
+            # Replace placeholders in headers and footers
+            for section in doc.sections:
+                for paragraph in section.header.paragraphs:
+                    WordDocumentGenerator._replace_paragraph_placeholders(paragraph, filled_data)
+                for paragraph in section.footer.paragraphs:
+                    WordDocumentGenerator._replace_paragraph_placeholders(paragraph, filled_data)
+            
+            # Save the populated document
+            doc.save(output_path)
+            return output_path
+        
+        except Exception as e:
+            raise Exception(f"Error generating document from template: {str(e)}")
+    
+    @staticmethod
+    def _replace_paragraph_placeholders(paragraph, filled_data):
+        """
+        Replace placeholders in a paragraph while preserving formatting
+        
+        Args:
+            paragraph: A paragraph object from python-docx
+            filled_data (dict): Data to fill the placeholders
+        """
+        # Get full paragraph text
+        full_text = paragraph.text
+        
+        # Find all placeholders
+        placeholders = re.findall(r'{{([^}]+)}}', full_text)
+        
+        if not placeholders:
+            return
+        
+        # Clear the paragraph runs while keeping the paragraph
+        for run in paragraph.runs:
+            run.text = ''
+        
+        # Build new text with filled data
+        result_text = full_text
+        for placeholder in placeholders:
+            placeholder_key = placeholder.strip()
+            value = filled_data.get(placeholder_key, '')
+            result_text = result_text.replace('{{' + placeholder + '}}', str(value))
+        
+        # Add the filled text as a single run
+        paragraph.clear()
+        paragraph.add_run(result_text)
+    
+    @staticmethod
     def _fill_placeholders(text, data):
         """
         Replace placeholders in text with actual data
