@@ -2,10 +2,12 @@ from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 from models import db, Template, GeneratedDocument
 from word_generator import WordDocumentGenerator
+from docx import Document
 import os
 from dotenv import load_dotenv
 import json
 from datetime import datetime
+import re
 
 load_dotenv()
 
@@ -149,6 +151,121 @@ def delete_template(template_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/upload-docx-template', methods=['POST'])
+def upload_docx_template():
+    """Upload a Word document template and extract placeholders"""
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.endswith('.docx'):
+            return jsonify({'error': 'Only .docx files are supported'}), 400
+        
+        # Save uploaded file temporarily
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(temp_path)
+        
+        # Extract text and find placeholders
+        try:
+            doc = Document(temp_path)
+            full_text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+            
+            # Find all placeholders {{placeholder_name}}
+            placeholders = re.findall(r'{{(\w+)}}', full_text)
+            unique_placeholders = list(dict.fromkeys(placeholders))  # Remove duplicates, preserve order
+            
+            if not unique_placeholders:
+                return jsonify({'error': 'No placeholders found in document. Use {{field_name}} format'}), 400
+            
+            # Store file for later retrieval
+            template_data = {
+                'filename': file.filename,
+                'temp_path': temp_path,
+                'placeholders': unique_placeholders,
+                'full_text': full_text,
+                'file_size': len(file.read())
+            }
+            
+            return jsonify({
+                'success': True,
+                'message': 'Template uploaded successfully',
+                'placeholders': unique_placeholders,
+                'filename': file.filename,
+                'preview_text': full_text[:500] + '...' if len(full_text) > 500 else full_text
+            }), 200
+            
+        except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return jsonify({'error': f'Error reading document: {str(e)}'}), 400
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/save-template-from-upload', methods=['POST'])
+def save_template_from_upload():
+    """Save uploaded template to database with field mappings"""
+    try:
+        data = request.get_json()
+        
+        if not data or not all(k in data for k in ['name', 'category', 'filename', 'fields']):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Check if template with this name already exists
+        existing = Template.query.filter_by(name=data['name']).first()
+        if existing:
+            return jsonify({'error': 'Template with this name already exists'}), 409
+        
+        # Find the temporary file
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], data['filename'])
+        
+        if not os.path.exists(temp_path):
+            return jsonify({'error': 'Uploaded file not found'}), 404
+        
+        # Read the document content for storage
+        with open(temp_path, 'rb') as f:
+            doc_content = f.read()
+        
+        # Store original filename for reference
+        template_filename = f"template_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        permanent_path = os.path.join(app.config['UPLOAD_FOLDER'], template_filename)
+        
+        # Move file to permanent location
+        with open(permanent_path, 'wb') as f:
+            f.write(doc_content)
+        
+        # Create template in database
+        template = Template(
+            name=data['name'],
+            description=data.get('description', ''),
+            category=data.get('category', 'General'),
+            fields=data['fields'],  # Field mappings with placeholders
+            template_content=permanent_path  # Store path to docx file
+        )
+        
+        db.session.add(template)
+        db.session.commit()
+        
+        # Clean up temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Template saved successfully',
+            'template': template.to_dict()
+        }), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/generate-document', methods=['POST'])
 def generate_document():
     """Generate a Word document from a template"""
@@ -171,12 +288,21 @@ def generate_document():
         filename = f"{template.name.replace(' ', '_')}_{timestamp}.docx"
         filepath = os.path.join(app.config['DOCS_FOLDER'], filename)
         
-        # Generate Word document
-        WordDocumentGenerator.generate_document(
-            template.template_content,
-            filled_data,
-            filepath
-        )
+        # Check if template_content is a file path (uploaded docx) or text content
+        if template.template_content.endswith('.docx') or os.path.exists(template.template_content):
+            # It's an uploaded Word document
+            WordDocumentGenerator.generate_from_docx(
+                template.template_content,
+                filled_data,
+                filepath
+            )
+        else:
+            # It's text-based template content
+            WordDocumentGenerator.generate_document(
+                template.template_content,
+                filled_data,
+                filepath
+            )
         
         # Save to database
         generated_doc = GeneratedDocument(
