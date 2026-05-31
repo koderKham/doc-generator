@@ -45,6 +45,7 @@
             gap: 10px;
             margin-bottom: 30px;
             border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
         }
 
         .tab-button {
@@ -100,6 +101,7 @@
         input[type="date"],
         input[type="email"],
         input[type="number"],
+        input[type="file"],
         select,
         textarea {
             border: 2px solid #ddd;
@@ -115,6 +117,7 @@
         input[type="date"]:focus,
         input[type="email"]:focus,
         input[type="number"]:focus,
+        input[type="file"]:focus,
         select:focus,
         textarea:focus {
             outline: none;
@@ -276,6 +279,19 @@
             margin-bottom: 20px;
         }
 
+        .upload-section {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px dashed #ddd;
+        }
+
+        .upload-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
         .spinner {
             display: none;
             width: 20px;
@@ -315,6 +331,32 @@
             border: 1px solid #f5c6cb;
         }
 
+        .placeholders-preview {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .placeholders-preview h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+
+        .placeholder-tag {
+            display: inline-block;
+            background-color: #4caf50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
         @media (max-width: 768px) {
             .content-wrapper {
                 grid-template-columns: 1fr;
@@ -329,6 +371,7 @@
 
         <div class="tabs">
             <button class="tab-button active" onclick="switchTab(event, 'word-generator')">📄 Word Generator</button>
+            <button class="tab-button" onclick="switchTab(event, 'add-template')">⬆️ Add Template</button>
             <button class="tab-button" onclick="switchTab(event, 'classic-generator')">✏️ Classic Generator</button>
             <button class="tab-button" onclick="switchTab(event, 'documents')">📁 Generated Documents</button>
         </div>
@@ -351,6 +394,70 @@
                     <button type="button" class="btn-secondary" onclick="resetForm()">Reset</button>
                 </div>
                 <div class="status-message" id="word-status"></div>
+            </div>
+        </div>
+
+        <!-- Add Template Tab -->
+        <div id="add-template" class="tab-content">
+            <div class="upload-section">
+                <h3>📤 Upload Template File</h3>
+                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">Upload a .docx file with placeholders in the format <code>{{field_name}}</code></p>
+                
+                <div class="form-group">
+                    <label for="templateFile">Select .docx File:</label>
+                    <input type="file" id="templateFile" accept=".docx" onchange="handleFileUpload(event)">
+                </div>
+
+                <button class="btn-primary" onclick="uploadTemplate()">
+                    <span class="spinner" id="spinner-upload"></span>
+                    Upload & Analyze Template
+                </button>
+                <div class="status-message" id="upload-status"></div>
+
+                <div class="placeholders-preview" id="placeholders-preview">
+                    <h4>Detected Placeholders:</h4>
+                    <div id="placeholders-list"></div>
+                </div>
+            </div>
+
+            <div id="template-config" style="display: none;">
+                <div class="dynamic-form">
+                    <h3 style="color: #333; margin-bottom: 20px;">Configure Template</h3>
+                    <div class="form-group">
+                        <label for="templateName">Template Name:</label>
+                        <input type="text" id="templateName" placeholder="e.g., Invoice Template" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="templateDesc">Description:</label>
+                        <textarea id="templateDesc" placeholder="Describe what this template is used for..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="templateCategory">Category:</label>
+                        <select id="templateCategory">
+                            <option value="General">General</option>
+                            <option value="Reports">Reports</option>
+                            <option value="Meetings">Meetings</option>
+                            <option value="Invoices">Invoices</option>
+                            <option value="Contracts">Contracts</option>
+                            <option value="Letters">Letters</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <h4 style="color: #333; margin-top: 20px; margin-bottom: 15px;">Configure Fields</h4>
+                    <div id="fields-container"></div>
+
+                    <div class="button-group">
+                        <button type="button" class="btn-primary" onclick="saveTemplate()">
+                            <span class="spinner" id="spinner-save"></span>
+                            Save Template
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="resetTemplateUpload()">Cancel</button>
+                    </div>
+                    <div class="status-message" id="save-status"></div>
+                </div>
             </div>
         </div>
 
@@ -392,6 +499,8 @@
 
     <script>
         let selectedTemplateId = null;
+        let uploadedFileName = null;
+        let detectedPlaceholders = [];
 
         document.addEventListener('DOMContentLoaded', function() {
             loadTemplates();
@@ -420,6 +529,8 @@
                             <span class="category">${t.category}</span>
                         </div>
                     `).join('');
+                } else {
+                    container.innerHTML = '<p style="grid-column: 1/-1;">No templates available. <a href="#" onclick="switchTab(event, \'add-template\')">Create one</a></p>';
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -469,6 +580,148 @@
             } catch (error) {
                 showStatus('word-status', 'Error: ' + error.message, 'error');
             }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.name.endsWith('.docx')) {
+                showStatus('upload-status', 'Please select a .docx file', 'error');
+                document.getElementById('templateFile').value = '';
+                return;
+            }
+
+            uploadedFileName = file.name;
+            showStatus('upload-status', `File selected: ${file.name}`, 'success');
+        }
+
+        async function uploadTemplate() {
+            const fileInput = document.getElementById('templateFile');
+            if (!fileInput.files.length) {
+                showStatus('upload-status', 'Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                showSpinner('spinner-upload', true);
+                const response = await fetch('/api/upload-docx-template', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    detectedPlaceholders = data.placeholders;
+                    showPlaceholders(data.placeholders);
+                    generateFieldsConfig(data.placeholders);
+                    document.getElementById('template-config').style.display = 'block';
+                    showStatus('upload-status', 'Template analyzed successfully!', 'success');
+                } else {
+                    showStatus('upload-status', data.error || 'Error uploading template', 'error');
+                }
+            } catch (error) {
+                showStatus('upload-status', 'Error: ' + error.message, 'error');
+            } finally {
+                showSpinner('spinner-upload', false);
+            }
+        }
+
+        function showPlaceholders(placeholders) {
+            const preview = document.getElementById('placeholders-preview');
+            const list = document.getElementById('placeholders-list');
+            list.innerHTML = placeholders.map(p => `<span class="placeholder-tag">{{${p}}}</span>`).join('');
+            preview.style.display = 'block';
+        }
+
+        function generateFieldsConfig(placeholders) {
+            const container = document.getElementById('fields-container');
+            container.innerHTML = placeholders.map((placeholder, index) => `
+                <div class="form-group" style="background: #fff; padding: 15px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
+                    <h5 style="color: #333; margin-bottom: 10px;">Field: <code>{{${placeholder}}}</code></h5>
+                    <label>Label:</label>
+                    <input type="text" class="field-label" placeholder="e.g., Customer Name" value="${placeholder.replace(/_/g, ' ').charAt(0).toUpperCase() + placeholder.replace(/_/g, ' ').slice(1)}">
+                    
+                    <label>Field Type:</label>
+                    <select class="field-type">
+                        <option value="text">Text</option>
+                        <option value="email">Email</option>
+                        <option value="date">Date</option>
+                        <option value="number">Number</option>
+                        <option value="textarea">Text Area</option>
+                        <option value="select">Dropdown</option>
+                    </select>
+                    
+                    <label><input type="checkbox" class="field-required" checked> Required</label>
+                </div>
+            `).join('');
+        }
+
+        async function saveTemplate() {
+            const name = document.getElementById('templateName').value;
+            const description = document.getElementById('templateDesc').value;
+            const category = document.getElementById('templateCategory').value;
+
+            if (!name) {
+                showStatus('save-status', 'Template name is required', 'error');
+                return;
+            }
+
+            const fields = [];
+            document.querySelectorAll('.field-label').forEach((label, index) => {
+                const placeholder = detectedPlaceholders[index];
+                fields.push({
+                    name: placeholder,
+                    label: label.value || placeholder,
+                    type: document.querySelectorAll('.field-type')[index].value,
+                    required: document.querySelectorAll('.field-required')[index].checked
+                });
+            });
+
+            try {
+                showSpinner('spinner-save', true);
+                const response = await fetch('/api/save-template-from-upload', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        category,
+                        filename: uploadedFileName,
+                        fields
+                    })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus('save-status', 'Template saved successfully!', 'success');
+                    setTimeout(() => {
+                        resetTemplateUpload();
+                        loadTemplates();
+                        switchTab({preventDefault: () => {}}, 'word-generator');
+                    }, 1500);
+                } else {
+                    showStatus('save-status', data.error || 'Error saving template', 'error');
+                }
+            } catch (error) {
+                showStatus('save-status', 'Error: ' + error.message, 'error');
+            } finally {
+                showSpinner('spinner-save', false);
+            }
+        }
+
+        function resetTemplateUpload() {
+            document.getElementById('templateFile').value = '';
+            document.getElementById('templateName').value = '';
+            document.getElementById('templateDesc').value = '';
+            document.getElementById('templateCategory').value = 'General';
+            document.getElementById('template-config').style.display = 'none';
+            document.getElementById('placeholders-preview').style.display = 'none';
+            uploadedFileName = null;
+            detectedPlaceholders = [];
         }
 
         async function generateDocumentation() {
@@ -536,6 +789,15 @@
             el.textContent = msg;
             el.className = `status-message ${type}`;
             setTimeout(() => { el.className = 'status-message'; }, 4000);
+        }
+
+        function showSpinner(id, show) {
+            const el = document.getElementById(id);
+            if (show) {
+                el.style.display = 'inline-block';
+            } else {
+                el.style.display = 'none';
+            }
         }
     </script>
 </body>
