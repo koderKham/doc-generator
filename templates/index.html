@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .input-section, .output-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        textarea {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            resize: vertical;
+            min-height: 300px;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        select {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .generate-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .copy-btn {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .copy-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .output-section textarea {
+            background-color: #f9f9f9;
+            color: #333;
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            text-align: center;
+            display: none;
+        }
+
+        .status-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        .status-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Documentation Generator</h1>
+        <p class="subtitle">Transform your content into beautiful documentation</p>
+
+        <div class="content-wrapper">
+            <div class="input-section">
+                <label for="docType">Documentation Type:</label>
+                <select id="docType">
+                    <option value="markdown">Markdown</option>
+                    <option value="html">HTML</option>
+                </select>
+
+                <label for="inputContent">Paste your content here:</label>
+                <textarea id="inputContent" placeholder="Enter code, notes, or any content you want to document..."></textarea>
+                <p class="info-text">Tip: Paste code snippets, project descriptions, or API specifications</p>
+            </div>
+
+            <div class="output-section">
+                <label for="outputContent">Generated Documentation:</label>
+                <textarea id="outputContent" readonly placeholder="Generated documentation will appear here..."></textarea>
+                <p class="info-text">Your documentation will be generated automatically</p>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="generate-btn" onclick="generateDocumentation()">
+                <span class="spinner" id="spinner"></span>
+                Generate Documentation
+            </button>
+            <button class="copy-btn" onclick="copyToClipboard()">Copy Output</button>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+    </div>
+
+    <script>
+        async function generateDocumentation() {
+            const inputContent = document.getElementById('inputContent').value;
+            const docType = document.getElementById('docType').value;
+            const button = document.querySelector('.generate-btn');
+            const spinner = document.getElementById('spinner');
+            const statusMessage = document.getElementById('statusMessage');
+
+            if (!inputContent.trim()) {
+                showStatus('Please enter some content to generate documentation', 'error');
+                return;
+            }
+
+            button.disabled = true;
+            spinner.style.display = 'inline-block';
+            statusMessage.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content: inputContent,
+                        type: docType
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate documentation');
+                }
+
+                const data = await response.json();
+                document.getElementById('outputContent').value = data.documentation;
+                showStatus('Documentation generated successfully!', 'success');
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+        function copyToClipboard() {
+            const outputContent = document.getElementById('outputContent');
+            if (!outputContent.value.trim()) {
+                showStatus('Nothing to copy. Generate documentation first.', 'error');
+                return;
+            }
+
+            outputContent.select();
+            document.execCommand('copy');
+            showStatus('Copied to clipboard!', 'success');
+        }
+
+        function showStatus(message, type) {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        }
+
+        // Allow Enter+Ctrl to generate documentation
+        document.getElementById('inputContent').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                generateDocumentation();
+            }
+        });
+    </script>
+</body>
+</html>
