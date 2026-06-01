@@ -59,6 +59,64 @@ class WordDocumentGenerator:
         return filename
     
     @staticmethod
+    def generate_from_docx(template_path, filled_data, output_filename):
+        """
+        Generate a Word document from an uploaded template (.docx)
+        
+        Args:
+            template_path (str): Path to the template .docx file
+            filled_data (dict): Data to fill the template placeholders
+            output_filename (str): Output filename for generated document
+        
+        Returns:
+            str: Path to generated document
+        """
+        # Load the template document
+        doc = Document(template_path)
+        
+        # Replace placeholders in all paragraphs
+        for paragraph in doc.paragraphs:
+            WordDocumentGenerator._replace_text_in_paragraph(paragraph, filled_data)
+        
+        # Replace placeholders in tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        WordDocumentGenerator._replace_text_in_paragraph(paragraph, filled_data)
+        
+        # Save the filled document
+        doc.save(output_filename)
+        return output_filename
+    
+    @staticmethod
+    def _replace_text_in_paragraph(paragraph, filled_data):
+        """
+        Replace placeholders in a paragraph while preserving formatting
+        
+        Args:
+            paragraph: Paragraph object from docx
+            filled_data (dict): Data to fill
+        """
+        # Check if paragraph contains placeholders
+        full_text = paragraph.text
+        placeholders = re.findall(r'{{(\w+)}}', full_text)
+        
+        if not placeholders:
+            return
+        
+        # Clear existing runs and rebuild with filled data
+        filled_text = WordDocumentGenerator._fill_placeholders(full_text, filled_data)
+        
+        # Clear paragraph
+        for run in paragraph.runs:
+            run._element.getparent().remove(run._element)
+        
+        # Add filled text as new run (preserves paragraph formatting)
+        if filled_text.strip():
+            paragraph.add_run(filled_text)
+    
+    @staticmethod
     def _fill_placeholders(text, data):
         """
         Replace placeholders in text with actual data
